@@ -1,0 +1,8 @@
+{
+  "name": "zreact",
+  "version": "1.0.0",
+  "description": "build own simple React",
+  "main": "index.js",
+  "author": "zprad <z472969214@163.com>",
+  "license": "MIT"
+}
