@@ -4,7 +4,7 @@ export function createElement(type, config, ...args) {
   const rawChildren = hasChildren ? [].concat(...args) : []
   const children = rawChildren.filter(ele => {
     return ele != null && ele !== false
-  }).map(ele => ele instanceof Object ? ele : createTextElement(c))
+  }).map(ele => ele instanceof Object ? ele : createTextElement(ele))
 
   props['children'] = children
   return {
@@ -13,7 +13,7 @@ export function createElement(type, config, ...args) {
   }
 }
 
-const TEXT_ELEMENT = 'TEXT ELEMENT'
+export const TEXT_ELEMENT = 'TEXT_ELEMENT'
 
 function createTextElement(value) {
   return {

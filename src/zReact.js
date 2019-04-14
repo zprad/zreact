@@ -1,3 +1,5 @@
+import { TEXT_ELEMENT } from './element'
+
 
 let rootInstance = null
 
@@ -15,15 +17,27 @@ function reconcile(parentDom, instance, element) {
   } else if (element == null) {
     parentDom.removeChild(instance.dom)
     return null
-  } else if (instance.element.type === element.type) {
+  } else if (instance.element.type !== element.type) {
+    let newInstance = instantiate(element)
+    parentDom.replaceChild(newInstance.dom, instance.dom)
+    return newInstance
+  } else if (typeof element.type === 'string') {
+    
     updateDomProps(instance.dom, instance.element.props, element.props)
     instance.childInstances = reconcileChildren(instance, element)
     instance.element = element
     return instance
   } else {
-    let newInstance = instantiate(element)
-    parentDom.replaceChild(newInstance.dom, instance.dom)
-    return newInstance
+    // update component instance
+    instance.publicInstance.props = element.props
+    const newChildElement = instance.publicInstance.render()
+    const oldChildInstance = instance.childInstance
+    const newChildInstance = reconcile(parentDom, oldChildInstance, newChildElement)
+
+    instance.dom = newChildInstance.dom
+    instance.childInstance = newChildInstance
+    instance.element = element
+    return instance
   }
 }
 
@@ -34,7 +48,7 @@ function reconcileChildren(instance, element) {
   const dom = instance.dom
   const newChildInstances = []
 
-  // 目前是以子元素在数组中的位置进行对应，后续要更改为以key来对应
+  // todo: 目前是以子元素在数组中的位置进行对应，后续要更改为以key来对应
   for (let index = 0; index < count; index++) {
     const childElement = children[index]
     const childInstance = childInstances[index]
@@ -42,7 +56,7 @@ function reconcileChildren(instance, element) {
     newChildInstances.push(newInstance)
   }
 
-  return newChildInstances
+  return newChildInstances.filter(instance => instance != null)
 }
 
 function updateDomProps(dom, preProps, nextProps) {
@@ -51,7 +65,7 @@ function updateDomProps(dom, preProps, nextProps) {
 
   Object.keys(preProps).filter(isListener).forEach(name => {
     let event = name.toLowerCase().substring(2)
-    dom.removeEventListenr(event, preProps[name])
+    dom.removeEventListener(event, preProps[name])
   })
 
   Object.keys(nextProps).filter(isListener).forEach(name => {
@@ -68,19 +82,65 @@ function updateDomProps(dom, preProps, nextProps) {
   })
 }
 
-export function instantiate(element) {
+function instantiate(element) {
   const { type, props } = element
-  const isTextNode = type === 'TEXT ELEMENT'
-  const dom = isTextNode ? document.createTextNode('') : document.createElement(type)
+  const isDomElement = typeof type === 'string'
+  
+  if (isDomElement) {
+    const isTextNode = type === TEXT_ELEMENT
+    const dom = isTextNode ? document.createTextNode('') : document.createElement(type)
 
-  updateDomProps(dom, {}, props)
+    updateDomProps(dom, {}, props)
 
-  const childElements = props.children || []
-  const childInstances = childElements.map(instantiate)
+    const childElements = props.children || []
+    const childInstances = childElements.map(instantiate)
 
-  const childDoms = childInstances(childInstance => childInstance.dom)
+    const childDoms = childInstances.map(childInstance => childInstance.dom)
 
-  childDoms.forEach(childDom => dom.appendChild(childDom))
+    childDoms.forEach(childDom => dom.appendChild(childDom))
 
-  return { element, dom, childInstances, }
+    return { element, dom, childInstances, }
+  } else {
+    // 初始化组件
+    const instance = {}
+
+    const publicInstance = createPublicInstance(element, instance)
+    const childElemnt = publicInstance.render()
+    const childInstance = instantiate(childElemnt)
+    const dom = childInstance.dom
+
+    // todo: 这里是不是循环引用了，instance上的pubilcInstance中__internalInstance又指向了instance
+    Object.assign(instance, { dom, element, childInstance, publicInstance })
+    return instance
+  }
+  
+  
 }
+
+// 组件实例化
+function createPublicInstance(element, internalInstance) {
+  const { type, props } = element
+  const publicInstance = new type(props)
+  publicInstance.__internalInstance = internalInstance
+  return publicInstance
+}
+
+class Component {
+  constructor(props) {
+    this.props = props
+    this.state = this.state || {}
+  }
+
+  setState(nextState) {
+    // todo: 异步更新怎么实现
+    this.state = Object.assign({}, this.state, nextState)
+    updateInstance(this.__internalInstance)
+  }
+}
+
+function updateInstance(internalInstance) {
+  const parentDom = internalInstance.dom.parentNode
+  const element = internalInstance.element
+  reconcile(parentDom, internalInstance, element)
+}
+
